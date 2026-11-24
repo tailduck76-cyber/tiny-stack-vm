@@ -1,15 +1,11 @@
-// Tiny stack VM for the make.fun bounty "Build a tiny stack virtual machine, 22 November 2026".
-// Implements the ISA in the kit's program/generator/subject/ISA.md: 32-bit wrapping values, a 256-value
-// data stack, a 64-entry call stack, 256 words of memory, input/output, and traps 2-11 with their
-// exit codes. One run answers every instance i001..i040 under $MAKEFUN_INPUT_DIR (default /input),
-// writing $MAKEFUN_OUTPUT_DIR/<id>/stdout.bin and <id>/exit.txt for each.
+// Tiny stack VM: 32-bit wrapping ints, 256 stack, 256 mem, traps 2-11; answers every instance.
 import{mkdirSync,readFileSync,readdirSync,writeFileSync}from'node:fs';
-import{join}from'node:path';
 const I=process.env.MAKEFUN_INPUT_DIR??'/input',O=process.env.MAKEFUN_OUTPUT_DIR??'/output';
 function run(p:Buffer,q:Buffer){
  const s=new Int32Array(256),m=new Int32Array(256),k=new Int32Array(64),o:number[]=[];
  let sp=0,kp=0,pc=0,ip=0,st=0;
  const F=(e:number)=>({o:Buffer.from(o),e});
+ const J=()=>((p[pc]|p[pc+1]<<8)<<16)>>16;
  for(;;){
   if(st>=1e6)return F(10);
   if(pc<0||pc>=p.length)return F(9);
@@ -71,15 +67,15 @@ function run(p:Buffer,q:Buffer){
   case 0x22:if(sp<2)return F(2);s[sp-2]=(s[sp-2]>>>0)<(s[sp-1]>>>0)?1:0;sp--;break;
   case 0x30:{
    if(pc+2>p.length)return F(9);
-   const j=((p[pc]|p[pc+1]<<8)<<16)>>16;pc+=2+j;break}
+   const j=J();pc+=2+j;break}
   case 0x31:{
    if(pc+2>p.length)return F(9);
    if(sp<1)return F(2);
-   const j=((p[pc]|p[pc+1]<<8)<<16)>>16,v=s[--sp];pc+=2;if(!v)pc+=j;break}
+   const j=J(),v=s[--sp];pc+=2;if(!v)pc+=j;break}
   case 0x32:{
    if(pc+2>p.length)return F(9);
    if(sp<1)return F(2);
-   const j=((p[pc]|p[pc+1]<<8)<<16)>>16,v=s[--sp];pc+=2;if(v)pc+=j;break}
+   const j=J(),v=s[--sp];pc+=2;if(v)pc+=j;break}
   case 0x33:{
    if(pc+2>p.length)return F(9);
    if(kp>=64)return F(7);
@@ -95,9 +91,9 @@ function run(p:Buffer,q:Buffer){
    m[a]=v;break}
   case 0x50:{
    if(sp<1)return F(2);
-   const t=String(s[--sp]);
+   const t=s[--sp]+'';
    if(o.length+t.length>65536)return F(11);
-   for(let j=0;j<t.length;j++)o.push(t.charCodeAt(j));
+   for(const c of t)o.push(c.charCodeAt(0));
    break}
   case 0x51:
    if(sp<1)return F(2);
@@ -112,13 +108,13 @@ function run(p:Buffer,q:Buffer){
  }
 }
 for(const id of readdirSync(I).sort()){
- const d=join(O,id);mkdirSync(d,{recursive:true});
+ const d=O+'/'+id;mkdirSync(d,{recursive:true});
  try{
-  const r=run(readFileSync(join(I,id,'program.bin')),readFileSync(join(I,id,'input.bin')));
-  writeFileSync(join(d,'stdout.bin'),r.o);
-  writeFileSync(join(d,'exit.txt'),r.e+'\n');
+  const r=run(readFileSync(I+'/'+id+'/program.bin'),readFileSync(I+'/'+id+'/input.bin'));
+  writeFileSync(d+'/stdout.bin',r.o);
+  writeFileSync(d+'/exit.txt',r.e+'\n');
  }catch{
-  writeFileSync(join(d,'stdout.bin'),'');
-  writeFileSync(join(d,'exit.txt'),'0\n');
+  writeFileSync(d+'/stdout.bin','');
+  writeFileSync(d+'/exit.txt','0\n');
  }
 }
